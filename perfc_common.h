@@ -447,6 +447,57 @@ extern "C" {
             })
 
 /*!
+ * \brief measure the stack usage of the given code segement
+ * \param[in] __STR a name for this measurement
+ * \param[in] __SIZE offset (in bytes) from the current SP to the stack limit
+ * \param[in] ... an optional code segement, in which we can read the measured
+ *                result from __stack_used__.
+ */
+#define __stack_usage_ex__(__STR, __SIZE, ...)                                  \
+                                                                                \
+        perfc_using(uintptr_t __stack_used__ = (uintptr_t)-1,                   \
+            PERFC_SAFE_NAME(nSP) = __perfc_port_get_sp(),                       \
+            {perfc_stack_fill(  PERFC_SAFE_NAME(nSP),                           \
+                                (uintptr_t)((char *)PERFC_SAFE_NAME(nSP)        \
+                                                        + __SIZE));},           \
+            {                                                                   \
+                PERFC_SAFE_NAME(nSP) = (PERFC_SAFE_NAME(nSP) + 7)               \
+                                     & (~((uintptr_t)0x07));                    \
+                uintptr_t PERFC_SAFE_NAME(nStackLimit)                          \
+                    = (uintptr_t)((char *)PERFC_SAFE_NAME(nSP) + __SIZE);       \
+                PERFC_SAFE_NAME(nStackLimit) &= (~((uintptr_t)0x07));           \
+                if (PERFC_SAFE_NAME(nSP) >= PERFC_SAFE_NAME(nStackLimit)) {     \
+                    if (__PLOOC_VA_NUM_ARGS(__VA_ARGS__) == 0) {                \
+                        __perf_counter_printf__(                                \
+                            "\r\n-------------------------------------\r\n"     \
+                            "%s Stack Overflow!!!"                              \
+                            " SP: [0x%08" PRIxPTR "]"                           \
+                            " Stack Limit: [0x%08" PRIxPTR "]\r\n",             \
+                            (const char *)(__STR),                              \
+                            PERFC_SAFE_NAME(nSP),                               \
+                            PERFC_SAFE_NAME(nStackLimit));                      \
+                    } else {                                                    \
+                        __VA_ARGS__;                                            \
+                    }                                                           \
+                } else {                                                        \
+                    __stack_used__                                              \
+                        = PERFC_SAFE_NAME(nStackLimit)                          \
+                        - PERFC_SAFE_NAME(nSP)                                  \
+                        - perfc_stack_remain(PERFC_SAFE_NAME(nStackLimit));     \
+                    if (__PLOOC_VA_NUM_ARGS(__VA_ARGS__) == 0) {                \
+                        __perf_counter_printf__(                                \
+                            "\r\n-------------------------------------\r\n"     \
+                            "%s Stack Used: %" PRIuPTR " bytes\r\n",            \
+                            (const char *)(__STR),                              \
+                            __stack_used__);                                    \
+                    } else {                                                    \
+                        __VA_ARGS__;                                            \
+                    }                                                           \
+                }                                                               \
+            })
+
+
+/*!
  * \brief measure the maximum stack usage (so far) for the given code segement
  * \param[in] __STR a name for this measurement
  * \param[in] __perfc_stack_limit the stack limit address (the last availble 
@@ -466,6 +517,67 @@ extern "C" {
                                      & (~((uintptr_t)0x07));                    \
             uintptr_t PERFC_SAFE_NAME(nStackLimit)                              \
                 = (uintptr_t)(__perfc_stack_limit);                             \
+            PERFC_SAFE_NAME(nStackLimit) &= (~((uintptr_t)0x07));               \
+                                                                                \
+            if (PERFC_SAFE_NAME(nSP) >= PERFC_SAFE_NAME(nStackLimit)) {         \
+                PERFC_SAFE_NAME(s_nStackUsedMax) = (size_t)(-1);                \
+                if (__PLOOC_VA_NUM_ARGS(__VA_ARGS__) == 0) {                    \
+                    __perf_counter_printf__(                                    \
+                            "\r\n-------------------------------------\r\n"     \
+                            "%s Stack Overflow!!!"                              \
+                            " SP: [0x%08" PRIxPTR "]"                           \
+                            " Stack Limit: [0x%08" PRIxPTR "]\r\n",             \
+                            (const char *)(__STR),                              \
+                            PERFC_SAFE_NAME(nSP),                               \
+                            PERFC_SAFE_NAME(nStackLimit));                      \
+                }                                                               \
+            } else if (PERFC_SAFE_NAME(s_nStackUsedMax) >= 0) {                 \
+                PERFC_SAFE_NAME(__stack_used__)                                 \
+                        = PERFC_SAFE_NAME(nStackLimit)                          \
+                        - PERFC_SAFE_NAME(nSP)                                  \
+                        - perfc_stack_remain(PERFC_SAFE_NAME(nStackLimit));     \
+                if (    PERFC_SAFE_NAME(s_nStackUsedMax)                        \
+                   <    PERFC_SAFE_NAME(__stack_used__)) {                      \
+                    PERFC_SAFE_NAME(s_nStackUsedMax)                            \
+                        = PERFC_SAFE_NAME(__stack_used__);                      \
+                                                                                \
+                    if (__PLOOC_VA_NUM_ARGS(__VA_ARGS__) == 0) {                \
+                        __perf_counter_printf__(                                \
+                            "\r\n-------------------------------------\r\n"     \
+                            "%s Stack Used: %" PRIuPTR " bytes\r\n",            \
+                            (const char *)(__STR),                              \
+                            PERFC_SAFE_NAME(__stack_used__));                   \
+                    }                                                           \
+                }                                                               \
+            }                                                                   \
+            if (__PLOOC_VA_NUM_ARGS(__VA_ARGS__) != 0) {                        \
+                size_t __stack_used_max__                                       \
+                    = PERFC_SAFE_NAME(s_nStackUsedMax);                         \
+                UNUSED_PARAM(__stack_used_max__);                               \
+                __VA_ARGS__;                                                    \
+            }                                                                   \
+        })
+
+/*!
+ * \brief measure the maximum stack usage (so far) for the given code segement
+ * \param[in] __STR a name for this measurement
+ * \param[in] __SIZE offset (in bytes) from the current SP to the stack limit
+ * \param[in] ... an optional code segement, in which we can read the measured
+ *                result from __stack_used_max__.
+ */
+#define __stack_usage_max_ex__(__STR, __SIZE, ...)                              \
+    perfc_using(uintptr_t PERFC_SAFE_NAME(__stack_used__) = (uintptr_t)-1,      \
+        PERFC_SAFE_NAME(nSP) = __perfc_port_get_sp(),                           \
+            {perfc_stack_fill(  PERFC_SAFE_NAME(nSP),                           \
+                                (uintptr_t)((char *)PERFC_SAFE_NAME(nSP)        \
+                                                        + __SIZE));},           \
+        {                                                                       \
+            static size_t PERFC_SAFE_NAME(s_nStackUsedMax) = 0;                 \
+                                                                                \
+            PERFC_SAFE_NAME(nSP) = (PERFC_SAFE_NAME(nSP) + 7)                   \
+                                     & (~((uintptr_t)0x07));                    \
+            uintptr_t PERFC_SAFE_NAME(nStackLimit)                              \
+                    = (uintptr_t)((char *)PERFC_SAFE_NAME(nSP) + __SIZE);       \
             PERFC_SAFE_NAME(nStackLimit) &= (~((uintptr_t)0x07));               \
                                                                                 \
             if (PERFC_SAFE_NAME(nSP) >= PERFC_SAFE_NAME(nStackLimit)) {         \
@@ -557,6 +669,55 @@ extern "C" {
             })
 
 /*!
+ * \brief measure the stack usage of the given code segement
+ * \param[in] __STR a name for this measurement
+ * \param[in] __SIZE offset (in bytes) from the current SP to the stack limit
+ * \param[in] ... an optional code segement, in which we can read the measured
+ *                result from __stack_used__.
+ */
+#define __stack_usage_ex__(__STR, __SIZE, ...)                                  \
+                                                                                \
+        perfc_using(uintptr_t __stack_used__ = (uintptr_t)-1,                   \
+            PERFC_SAFE_NAME(nSP) = __perfc_port_get_sp(),                       \
+            {perfc_stack_fill(  PERFC_SAFE_NAME(nSP),                           \
+                                (uintptr_t)((char *)PERFC_SAFE_NAME(nSP)        \
+                                                        - __SIZE));},           \
+            {                                                                   \
+                PERFC_SAFE_NAME(nSP) &= (~((uintptr_t)0x07));                   \
+                uintptr_t PERFC_SAFE_NAME(nStackLimit)                          \
+                    = (uintptr_t)((char *)PERFC_SAFE_NAME(nSP) - __SIZE);       \
+                PERFC_SAFE_NAME(nStackLimit)                                    \
+                    = (PERFC_SAFE_NAME(nStackLimit) + 7)                        \
+                    & (~((uintptr_t)0x07));                                     \
+                if (PERFC_SAFE_NAME(nSP) <= PERFC_SAFE_NAME(nStackLimit)) {     \
+                    if (__PLOOC_VA_NUM_ARGS(__VA_ARGS__) == 0) {                \
+                        __perf_counter_printf__(                                \
+                            "\r\n-------------------------------------\r\n"     \
+                            __STR " Stack Overflow!!!"                          \
+                            " SP: [0x%08" PRIxPTR "]"                           \
+                            " Stack Base: [0x%08" PRIxPTR "]\r\n",              \
+                            PERFC_SAFE_NAME(nSP),                               \
+                            PERFC_SAFE_NAME(nStackLimit));                      \
+                    } else {                                                    \
+                        __VA_ARGS__;                                            \
+                    }                                                           \
+                } else {                                                        \
+                    __stack_used__                                              \
+                        = PERFC_SAFE_NAME(nSP)                                  \
+                        - PERFC_SAFE_NAME(nStackLimit)                          \
+                        - perfc_stack_remain(PERFC_SAFE_NAME(nStackLimit));     \
+                    if (__PLOOC_VA_NUM_ARGS(__VA_ARGS__) == 0) {                \
+                        __perf_counter_printf__(                                \
+                            "\r\n-------------------------------------\r\n"     \
+                            __STR " Stack Used: %" PRIuPTR " bytes\r\n",        \
+                            __stack_used__);                                    \
+                    } else {                                                    \
+                        __VA_ARGS__;                                            \
+                    }                                                           \
+                }                                                               \
+            })
+
+/*!
  * \brief measure the maximum stack usage (so far) for the given code segement
  * \param[in] __STR a name for this measurement
  * \param[in] __perfc_stack_limit the stack based address (stack limit)
@@ -574,6 +735,67 @@ extern "C" {
             PERFC_SAFE_NAME(nSP) &= (~((uintptr_t)0x07));                       \
             uintptr_t PERFC_SAFE_NAME(nStackLimit)                              \
                 = (uintptr_t)(__perfc_stack_base);                              \
+            PERFC_SAFE_NAME(nStackLimit)                                        \
+                = (PERFC_SAFE_NAME(nStackLimit) + 7)                            \
+                & (~((uintptr_t)0x07));                                         \
+                                                                                \
+            if (PERFC_SAFE_NAME(nSP) <= PERFC_SAFE_NAME(nStackLimit)) {         \
+                PERFC_SAFE_NAME(s_nStackUsedMax) = (size_t)(-1);                \
+                if (__PLOOC_VA_NUM_ARGS(__VA_ARGS__) == 0) {                    \
+                    __perf_counter_printf__(                                    \
+                        "\r\n-------------------------------------\r\n"         \
+                        __STR " Stack Overflow!!!"                              \
+                        " SP: [0x%08" PRIxPTR "]"                               \
+                        " Stack Base: [0x%08" PRIxPTR "]\r\n",                  \
+                        PERFC_SAFE_NAME(nSP),                                   \
+                        PERFC_SAFE_NAME(nStackLimit));                          \
+                }                                                               \
+            } else if (PERFC_SAFE_NAME(s_nStackUsedMax) >= 0) {                 \
+                PERFC_SAFE_NAME(__stack_used__)                                 \
+                    = PERFC_SAFE_NAME(nSP)                                      \
+                    - PERFC_SAFE_NAME(nStackLimit)                              \
+                    - perfc_stack_remain(PERFC_SAFE_NAME(nStackLimit));         \
+                if (    PERFC_SAFE_NAME(s_nStackUsedMax)                        \
+                   <    PERFC_SAFE_NAME(__stack_used__)) {                      \
+                    PERFC_SAFE_NAME(s_nStackUsedMax)                            \
+                        = PERFC_SAFE_NAME(__stack_used__);                      \
+                                                                                \
+                    if (__PLOOC_VA_NUM_ARGS(__VA_ARGS__) == 0) {                \
+                        __perf_counter_printf__(                                \
+                            "\r\n-------------------------------------\r\n"     \
+                            __STR                                               \
+                            " Stack Used Max: %" PRIuPTR " bytes\r\n",          \
+                            PERFC_SAFE_NAME(__stack_used__));                   \
+                    }                                                           \
+                }                                                               \
+            }                                                                   \
+            if (__PLOOC_VA_NUM_ARGS(__VA_ARGS__) != 0) {                        \
+                size_t __stack_used_max__                                       \
+                    = PERFC_SAFE_NAME(s_nStackUsedMax);                         \
+                UNUSED_PARAM(__stack_used_max__);                               \
+                __VA_ARGS__;                                                    \
+            }                                                                   \
+        })
+
+/*!
+ * \brief measure the maximum stack usage (so far) for the given code segement
+ * \param[in] __STR a name for this measurement
+ * \param[in] __SIZE offset (in bytes) from the current SP to the stack limit
+ * \param[in] ... an optional code segement, in which we can read the measured
+ *                result from __stack_used_max__.
+ */
+#define __stack_usage_max_ex__(__STR, __SIZE, ...)                              \
+    perfc_using(uintptr_t PERFC_SAFE_NAME(__stack_used__) = (uintptr_t)-1,      \
+        PERFC_SAFE_NAME(nSP) = __perfc_port_get_sp(),                           \
+            {perfc_stack_fill(  PERFC_SAFE_NAME(nSP),                           \
+                                (uintptr_t)((char *)PERFC_SAFE_NAME(nSP)        \
+                                                        - __SIZE));},           \
+        {                                                                       \
+            static size_t PERFC_SAFE_NAME(s_nStackUsedMax) = 0;                 \
+                                                                                \
+            PERFC_SAFE_NAME(nSP) &= (~((uintptr_t)0x07));                       \
+            uintptr_t PERFC_SAFE_NAME(nStackLimit)                              \
+                    = (uintptr_t)((char *)PERFC_SAFE_NAME(nSP) - __SIZE);       \
             PERFC_SAFE_NAME(nStackLimit)                                        \
                 = (PERFC_SAFE_NAME(nStackLimit) + 7)                            \
                 & (~((uintptr_t)0x07));                                         \
